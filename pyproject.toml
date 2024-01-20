@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "youtube-chatbot"
+version = "0.1.0"
+description = ""
+authors = ["dumbled0re <smu315064@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+python-dotenv = "^1.0.0"
+openai = "^1.8.0"
+langchain = "0.0.353"
+streamlit = "^1.30.0"
+langchain-openai = "^0.0.3"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
