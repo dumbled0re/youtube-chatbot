@@ -59,27 +59,9 @@ functions = [
 ]
 
 
-def get_question(llm, question):
+def call_chatbot_function(llm: ChatOpenAI, question: str) -> dict[str, dict[str, str]]:
     messages = llm.predict_messages(
         [HumanMessage(content=question)],
-        functions=functions,
-    )
-
-    return messages.additional_kwargs
-
-# TODO: 以下のget_keywordはいらないのでは？
-def get_keyword(llm, message):
-    messages = llm.predict_messages(
-        [HumanMessage(content=message)],
-        functions=functions,
-    )
-
-    return messages.additional_kwargs
-
-
-def get_index(llm, message):
-    messages = llm.predict_messages(
-        [HumanMessage(content=message)],
         functions=functions,
     )
 
@@ -273,7 +255,7 @@ def main() -> None:
     if user_input := st.chat_input("聞きたいことを入力してね！"):
         session_state.messages.append(HumanMessage(content=user_input))
         with st.spinner("Chatbot is typing ..."):
-            additional_kwargs = get_question(llm, user_input)
+            additional_kwargs = call_chatbot_function(llm, user_input)
             if additional_kwargs:
                 if additional_kwargs["function_call"]["name"] == "generate_video_response":
                     question = json.loads(additional_kwargs["function_call"]["arguments"]).get("question")
@@ -283,7 +265,7 @@ def main() -> None:
                 elif additional_kwargs["function_call"]["name"] == "generate_video_time_response":
                     keyword = json.loads(additional_kwargs["function_call"]["arguments"]).get("keyword")
                     response = generate_video_time_response(llm, keyword, chunk_dict)
-                    additional_kwargs = get_index(llm, response.content)
+                    additional_kwargs = call_chatbot_function(llm, response.content)
                     if additional_kwargs:
                         # TODO: ここでfunction callingを使用するかが悩ましい(third_response内には数字が入っているけど取得していない時がある)
                         index = json.loads(additional_kwargs["function_call"]["arguments"]).get("index")
