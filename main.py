@@ -48,7 +48,7 @@ functions = [
 
 def set_up_page() -> None:
     """
-    ページの設定とヘッダーを表示する関数
+    ページの設定とヘッダーを表示
     """
 
     # ページ上部の部分の設定
@@ -62,7 +62,7 @@ def set_up_page() -> None:
 
 
 def init_session_state(session_state: dict) -> dict[str, list[str]]:
-    """セッションステートを初期化する関数
+    """セッションステートを初期化
 
     Args:
         session_state (dict): セッションステート
@@ -79,7 +79,7 @@ def init_session_state(session_state: dict) -> dict[str, list[str]]:
 
 
 def display_chat_history(messages: list) -> None:
-    """チャット履歴を表示する関数
+    """チャット履歴を表示
 
     Args:
         messages (list): チャットメッセージのリスト
@@ -110,7 +110,7 @@ def extract_number_from_text(text: str) -> int or None:
 
 
 def convert_seconds(seconds: int) -> str:
-    """秒を分や時間に換算する
+    """秒を分や時間に換算
 
     Args:
         seconds (int): 換算対象の秒数
