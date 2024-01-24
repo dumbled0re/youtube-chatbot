@@ -59,32 +59,31 @@ functions = [
 ]
 
 
-def get_question(llm, message):
-    chat_completion = llm.predict_messages(
-        [HumanMessage(content=message)],
+def get_question(llm, question):
+    messages = llm.predict_messages(
+        [HumanMessage(content=question)],
         functions=functions,
     )
 
-    return chat_completion
-    # return message.additional_kwargs
+    return messages.additional_kwargs
 
-
+# TODO: 以下のget_keywordはいらないのでは？
 def get_keyword(llm, message):
-    chat_completion = llm.predict_messages(
+    messages = llm.predict_messages(
         [HumanMessage(content=message)],
         functions=functions,
     )
 
-    return chat_completion
+    return messages.additional_kwargs
 
 
 def get_index(llm, message):
-    chat_completion = llm.predict_messages(
+    messages = llm.predict_messages(
         [HumanMessage(content=message)],
         functions=functions,
     )
 
-    return chat_completion
+    return messages.additional_kwargs
 
 
 def set_up_page() -> None:
@@ -102,7 +101,7 @@ def set_up_page() -> None:
     st.header("Youtube Chatbot 🤖")
 
 
-def init_session_state(session_state: dict) -> dict[str, list]:
+def init_session_state(session_state: dict) -> dict[str, list[str]]:
     """セッションステートを初期化する関数
 
     Args:
@@ -136,7 +135,7 @@ def display_chat_history(messages: list) -> None:
 
 
 def convert_seconds(seconds: int) -> str:
-    """秒数を入力として受け取り、分や時間に換算する
+    """秒を分や時間に換算する
 
     Args:
         seconds (int): 換算対象の秒数
@@ -223,11 +222,11 @@ def main():
 
     if user_input := st.chat_input("聞きたいことを入力してね！"):
         session_state.messages.append(HumanMessage(content=user_input))
-        with st.spinner("ChatGPT is typing ..."):
-            response = get_question(llm, user_input)
-            if response.additional_kwargs:
-                if response.additional_kwargs["function_call"]["name"] == "get_question":
-                    question = json.loads(response.additional_kwargs["function_call"]["arguments"]).get("question")
+        with st.spinner("Chatbot is typing ..."):
+            additional_kwargs = get_question(llm, user_input)
+            if additional_kwargs:
+                if additional_kwargs["function_call"]["name"] == "get_question":
+                    question = json.loads(additional_kwargs["function_call"]["arguments"]).get("question")
                     system_template = "あなたは、質問者からの質問を回答するAIです。"
                     human_template = """
                         以下のテキストを元に「{question}」についての質問に答えてください。
@@ -246,8 +245,8 @@ def main():
                     second_response = llm(prompt_message_list)
                     session_state.messages.append(AIMessage(content=second_response.content))
 
-                elif response.additional_kwargs["function_call"]["name"] == "get_keyword":
-                    keyword = json.loads(response.additional_kwargs["function_call"]["arguments"]).get("keyword")
+                elif additional_kwargs["function_call"]["name"] == "get_keyword":
+                    keyword = json.loads(additional_kwargs["function_call"]["arguments"]).get("keyword")
 
                     system_template = "あなたは、質問者からの質問を回答するAIです。"
                     human_template = """
@@ -275,18 +274,18 @@ def main():
                         chunk_dict=chunk_dict,
                         index="インデックス").to_messages()
                     second_response = llm(prompt_message_list)
-                    third_response = get_index(llm, second_response.content)
-                    if third_response.additional_kwargs:
+                    additional_kwargs = get_index(llm, second_response.content)
+                    if additional_kwargs:
                         # TODO: ここでfunction callingを使用するかが悩ましい(third_response内には数字が入っているけど取得していない時がある)
-                        index = json.loads(third_response.additional_kwargs["function_call"]["arguments"]).get("index")
+                        index = json.loads(additional_kwargs["function_call"]["arguments"]).get("index")
                         if index is not None:
                             start = convert_seconds(chunk_dict[int(index)]["start"])
                             end = convert_seconds(chunk_dict[int(index)]["end"])
-                            ai_answer = f"{keyword}の説明は動画の{start}から{end}で話されています。"
-                            session_state.messages.append(AIMessage(content=ai_answer))
+                            answer = f"{keyword}の説明は動画の{start}から{end}で話されています。"
+                            session_state.messages.append(AIMessage(content=answer))
                         else:
-                            ai_answer = f"私が思う{keyword}の説明に最も関連性が高いtextのインデックスは{index}番です。"
-                            session_state.messages.append(AIMessage(content=ai_answer))
+                            answer = f"私が思う{keyword}の説明に最も関連性が高いtextのインデックスは{index}番です。"
+                            session_state.messages.append(AIMessage(content=answer))
                     else:
                         session_state.messages.append(AIMessage(content=second_response.content))
             else:
