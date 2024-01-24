@@ -15,7 +15,7 @@ load_dotenv()
 
 functions = [
     {
-        "name": "get_question",
+        "name": "generate_video_response",
         "description": "質問を抽出する",
         "parameters": {
             "type": "object",
@@ -199,7 +199,27 @@ def split_text_by_time_intervals(json_data, split_duration=60) -> dict[str, dict
     return chunk_dict
 
 
-def main():
+def generate_video_response(llm: ChatOpenAI, question: str, content: str) -> str:
+    system_template = "あなたは、質問者からの質問を回答するAIです。"
+    human_template = """
+        以下のテキストを元に「{question}」についての質問に答えてください。
+
+        {document}
+    """
+
+    system_message_prompt = SystemMessagePromptTemplate.from_template(system_template)
+    human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
+    chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt, human_message_prompt])
+    prompt_message_list = chat_prompt.format_prompt(
+        language="日本語",
+        question=question,
+        document=content).to_messages()
+    response = llm(prompt_message_list)
+
+    return response
+
+
+def main() -> None:
     llm = ChatOpenAI(openai_api_key=os.environ.get("OPENAI_API_KEY"),
                      model_name="gpt-3.5-turbo-16k",
                      temperature=0)
@@ -225,25 +245,10 @@ def main():
         with st.spinner("Chatbot is typing ..."):
             additional_kwargs = get_question(llm, user_input)
             if additional_kwargs:
-                if additional_kwargs["function_call"]["name"] == "get_question":
+                if additional_kwargs["function_call"]["name"] == "generate_video_response":
                     question = json.loads(additional_kwargs["function_call"]["arguments"]).get("question")
-                    system_template = "あなたは、質問者からの質問を回答するAIです。"
-                    human_template = """
-                        以下のテキストを元に「{question}」についての質問に答えてください。
-
-                        {document}
-                    """
-
-                    system_message_prompt = SystemMessagePromptTemplate.from_template(system_template)
-                    human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
-                    chat_prompt = ChatPromptTemplate.from_messages(
-                        [system_message_prompt, human_message_prompt])
-                    prompt_message_list = chat_prompt.format_prompt(
-                        language="日本語",
-                        question=question,
-                        document=content).to_messages()
-                    second_response = llm(prompt_message_list)
-                    session_state.messages.append(AIMessage(content=second_response.content))
+                    response = generate_video_response(llm, question, content)
+                    session_state.messages.append(AIMessage(content=response.content))
 
                 elif additional_kwargs["function_call"]["name"] == "get_keyword":
                     keyword = json.loads(additional_kwargs["function_call"]["arguments"]).get("keyword")
@@ -273,8 +278,8 @@ def main():
                         keyword=keyword,
                         chunk_dict=chunk_dict,
                         index="インデックス").to_messages()
-                    second_response = llm(prompt_message_list)
-                    additional_kwargs = get_index(llm, second_response.content)
+                    response = llm(prompt_message_list)
+                    additional_kwargs = get_index(llm, response.content)
                     if additional_kwargs:
                         # TODO: ここでfunction callingを使用するかが悩ましい(third_response内には数字が入っているけど取得していない時がある)
                         index = json.loads(additional_kwargs["function_call"]["arguments"]).get("index")
@@ -287,7 +292,7 @@ def main():
                             answer = f"私が思う{keyword}の説明に最も関連性が高いtextのインデックスは{index}番です。"
                             session_state.messages.append(AIMessage(content=answer))
                     else:
-                        session_state.messages.append(AIMessage(content=second_response.content))
+                        session_state.messages.append(AIMessage(content=response.content))
             else:
                 response = llm(session_state.messages)
                 session_state.messages.append(AIMessage(content=response.content))
