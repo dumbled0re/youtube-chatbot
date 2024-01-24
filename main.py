@@ -1,4 +1,5 @@
 import json
+import math
 import os
 
 import streamlit as st
@@ -8,7 +9,7 @@ from langchain.document_loaders import YoutubeLoader
 from langchain.prompts import (ChatPromptTemplate, HumanMessagePromptTemplate,
                                SystemMessagePromptTemplate)
 from langchain.schema import AIMessage, HumanMessage, SystemMessage
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from youtube_transcript_api import YouTubeTranscriptApi
 
 load_dotenv()
 
@@ -22,7 +23,6 @@ functions = [
                 "question": {
                     "type": "string",
                     "description": "質問事項 e.g. 動画内容を要約して",
-                    # "description": "質問事項",
                 },
             },
             "required": ["question"],
@@ -50,7 +50,7 @@ functions = [
             "properties": {
                 "index": {
                     "type": "string",
-                    "description": "インデックス番号 e.g. 1",
+                    "description": "インデックス番号 e.g. 1番",
                 },
             },
             "required": ["index"],
@@ -87,15 +87,49 @@ def get_index(llm, message):
     return chat_completion
 
 
+def split_text_by_time_intervals(json_data, split_duration=60) -> dict[str, dict[str, str]]:
+    """与えられた JSON データを指定した時間間隔でテキストを分割し、各チャンクの情報を返す
+
+    Parameters:
+        json_data (list): JSON データのリスト
+        split_duration (float): 区切りの秒数
+
+    Returns:
+        dict: 各チャンクの情報を含む辞書。キーはチャンクの番号、値はチャンクの情報を含む辞書
+    """
+
+    split_texts = list()
+    current_text = ""
+    current_start = 0
+    current_end = split_duration
+
+    for entry in json_data:
+        start_time = entry["start"]
+        text = entry["text"]
+
+        # テキストが現在の範囲内に収まっているかを確認
+        if start_time >= current_start + split_duration:
+            split_texts.append({"text": current_text.strip(), "start": current_start, "end": current_end})
+            current_text = ""
+            current_start += split_duration
+            current_end += split_duration
+
+        # テキストを追加
+        current_text += text
+
+    # 最後の部分を追加
+    if current_text:
+        split_texts.append({"text": current_text.strip(), "start": current_start, "end": current_end})
+
+    chunk_dict = {i: chunk_info for i, chunk_info in enumerate(split_texts)}
+
+    return chunk_dict
+
+
 def main():
     llm = ChatOpenAI(openai_api_key=os.environ.get("OPENAI_API_KEY"),
                      model_name="gpt-3.5-turbo-16k",
                      temperature=0)
-
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=300,  # chunkの文字数
-        chunk_overlap=10,  # chunk間の重複文字数
-    )
 
     # ページ上部の部分
     st.set_page_config(
@@ -111,47 +145,29 @@ def main():
         ]
 
     # ユーザーの入力を監視
-    # if url := st.text_input("Youtube URL: ", key="input"):
     url = st.text_input("Youtube URL: ", key="input")
     print(f"url: {url}")
     if url:
         with st.spinner("Fetching Content ..."):
             loader = YoutubeLoader.from_youtube_url(
                 url,
-                # add_video_info=True,  # タイトルや再生数も取得できる
+                add_video_info=True,
                 language=['ja']
             )
             document = loader.load()
-            chunk_document = text_splitter.split_text(document[0].page_content)
-            # TODO: ここでチャンク数分の番号と文章のディクショナリを作成したらいいかも
-            # TODO: それをうまいことgptに入れて、質問に答えられるようにする
-            num_list = [i for i in range(len(chunk_document))]
-            chunk_dict = dict(zip(num_list, chunk_document))
-            print(f"chunk_dict: {chunk_dict}")
-            video_content = document[0].page_content
-            # print(f"document: {document}\n")
-            # print(f"chunk_document: {chunk_document}\n")
-            # print(f"video_content: {video_content}")
+            video_id = document[0].metadata["source"]
+            content = document[0].page_content
+            transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=["ja"])
+            chunk_dict = split_text_by_time_intervals(transcript)
 
-    if user_input := st.chat_input("テキスト入力"):
+    if user_input := st.chat_input("聞きたいことを入力してね！"):
         st.session_state.messages.append(HumanMessage(content=user_input))
-        with st.spinner("生成中..."):
-            # response = llm(st.session_state.messages)
+        with st.spinner("ChatGPT is typing ..."):
             response = get_question(llm, user_input)
-            print(f"###### response.additional_kwargs: {response.additional_kwargs}")
             if response.additional_kwargs:
                 if response.additional_kwargs["function_call"]["name"] == "get_question":
-                    print(f"response: {response}")
-                    print(
-                        f"response.additional_kwargs: {response.additional_kwargs}"
-                        )
-
                     question = json.loads(
-                        response.additional_kwargs["function_call"]["arguments"]
-                        ).get("question")
-                    print(f"question: {question}")
-
-                    # system_template = "あなたは、質問者からの質問を{language}で回答するAIです。"
+                        response.additional_kwargs["function_call"]["arguments"]).get("question")
                     system_template = "あなたは、質問者からの質問を回答するAIです。"
                     human_template = """
                         以下のテキストを元に「{question}」についての質問に答えてください。
@@ -161,47 +177,37 @@ def main():
 
                     system_message_prompt = SystemMessagePromptTemplate.from_template(system_template)
                     human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
-
-                    print(f"system_message_prompt: {system_message_prompt}")
-                    print(f"human_message_prompt: {human_message_prompt}")
-
                     chat_prompt = ChatPromptTemplate.from_messages(
                         [system_message_prompt, human_message_prompt])
                     prompt_message_list = chat_prompt.format_prompt(
                         language="日本語",
                         question=question,
-                        document=video_content).to_messages()
+                        document=content).to_messages()
                     second_response = llm(prompt_message_list)
-                    print(f"second_response: {second_response}")
+                    st.session_state.messages.append(AIMessage(content=second_response.content))
 
-                    st.session_state.messages.append(
-                        AIMessage(content=second_response.content))
                 elif response.additional_kwargs["function_call"]["name"] == "get_keyword":
-                    print("get_keywordが呼び出されました。")
-                    keyword = json.loads(
-                        response.additional_kwargs["function_call"]["arguments"]
-                        ).get("keyword")
-                    print(f"keyword: {keyword}")
+                    keyword = json.loads(response.additional_kwargs["function_call"]["arguments"]).get("keyword")
 
-                    system_template = "あなたは、リストの中にあるチャンクを読み取ってインデックス番号を回答するAIです。"
-                    # system_template = """
-                    #     あなたは、Pythonのディクショナリ内にあるキーがインデックス番号とテキストを読み取って適切なインデックス番号を回答するAIです。
-                    # """
+                    system_template = "あなたは、質問者からの質問を回答するAIです。"
                     human_template = """
-                        以下のディクショナリ内にあるインデックス番号とテキストを元に{keyword}の説明がされてあるインデックス番号は何番でしょうか。
+                    キーワード: {keyword}
 
-                        {chunk_dict}
+                    jsonデータ:
+                    --------------------
+                    {chunk_dict}
+                    --------------------
 
-                        回答形式は「{keyword}の説明は{index}番です。」としてください。
-                        もしも、{keyword}の説明がない場合は「{keyword}の説明はありません。」としてください。
+                    上記のjsonデータの中から、キーワード「{keyword}」と最も関連性が高いtextのインデックスを答えてください。
+
+                    回答の形式は
+                    「{keyword}の説明は{index}番です。」
+                    としてください。
+                    もしも、{keyword}の説明がない場合は「{keyword}の説明は動画内にありません。」としてください。
                     """
 
                     system_message_prompt = SystemMessagePromptTemplate.from_template(system_template)
                     human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
-
-                    print(f"system_message_prompt: {system_message_prompt}")
-                    print(f"human_message_prompt: {human_message_prompt}")
-
                     chat_prompt = ChatPromptTemplate.from_messages(
                         [system_message_prompt, human_message_prompt])
                     prompt_message_list = chat_prompt.format_prompt(
@@ -209,20 +215,23 @@ def main():
                         chunk_dict=chunk_dict,
                         index="インデックス").to_messages()
                     second_response = llm(prompt_message_list)
-                    print(f"second_response: {second_response}")
-                    print(f"type(second_response.content): {type(second_response.content)}")
                     third_response = get_index(llm, second_response.content)
-                    if third_response.additional_kwargs["function_call"]["name"] == "get_index":
+                    if third_response.additional_kwargs:
+                        # TODO: ここでfunction callingを使用するかが悩ましい(third_response内には数字が入っているけど取得していない時がある)
                         index = json.loads(third_response.additional_kwargs["function_call"]["arguments"]).get("index")
-                        print(f"index: {index}")
-                        ai_answer = f"{keyword}の説明は{int(index)*1}分くらいからです。"
-                        st.session_state.messages.append(
-                            AIMessage(content=ai_answer))
+                        if index is not None:
+                            start = convert_seconds(chunk_dict[int(index)]["start"])
+                            end = convert_seconds(chunk_dict[int(index)]["end"])
+                            print(f"start: {start}")
+                            print(f"end: {end}")
+                            ai_answer = f"{keyword}の説明は動画の{start}から{end}で話されています。"
+                            st.session_state.messages.append(AIMessage(content=ai_answer))
+                        else:
+                            ai_answer = f"私が思う{keyword}の説明に最も関連性が高いtextのインデックスは{index}番です。"
+                            st.session_state.messages.append(AIMessage(content=ai_answer))
                     else:
-                        st.session_state.messages.append(
-                            AIMessage(content=second_response.content))
+                        st.session_state.messages.append(AIMessage(content=second_response.content))
             else:
-                print("function callingが呼び出されませんでした。")
                 response = llm(st.session_state.messages)
                 st.session_state.messages.append(
                     AIMessage(content=response.content))
