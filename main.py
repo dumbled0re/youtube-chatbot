@@ -87,6 +87,22 @@ def get_index(llm, message):
     return chat_completion
 
 
+def display_chat_history(messages: list) -> None:
+    """チャット履歴を表示する関数
+
+    Args:
+        messages (list): チャットメッセージのリスト
+    """
+
+    for message in messages:
+        if isinstance(message, AIMessage):
+            with st.chat_message('assistant'):
+                st.markdown(message.content)
+        elif isinstance(message, HumanMessage):
+            with st.chat_message('user'):
+                st.markdown(message.content)
+
+
 def convert_seconds(seconds: int) -> str:
     """秒数を入力として受け取り、分や時間に換算する
 
@@ -172,7 +188,6 @@ def main():
 
     # ユーザーの入力を監視
     url = st.text_input("Youtube URL: ", key="input")
-    print(f"url: {url}")
     if url:
         with st.spinner("Fetching Content ..."):
             loader = YoutubeLoader.from_youtube_url(
@@ -264,14 +279,7 @@ def main():
 
     # チャット履歴の表示
     messages = st.session_state.get('messages', [])
-    print(f"messages: {messages}")
-    for message in messages:
-        if isinstance(message, AIMessage):
-            with st.chat_message('assistant'):
-                st.markdown(message.content)
-        elif isinstance(message, HumanMessage):
-            with st.chat_message('user'):
-                st.markdown(message.content)
+    display_chat_history(messages)
 
 
 if __name__ == '__main__':
