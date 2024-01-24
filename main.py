@@ -87,6 +87,32 @@ def get_index(llm, message):
     return chat_completion
 
 
+def convert_seconds(seconds: int) -> str:
+    """秒数を入力として受け取り、分や時間に換算する
+
+    Args:
+        seconds (int): 換算対象の秒数
+    Returns:
+        str: 換算結果の数値または"時間:分"の文字列
+    """
+
+    minutes = 0
+    hours = 0
+
+    if seconds < 60:
+        return f"{seconds}秒"
+
+    elif seconds < 3600:
+        minutes = math.floor(seconds / 60)
+        remaining_seconds = seconds % 60
+        return f"{minutes}分{remaining_seconds}秒"
+
+    else:
+        hours = math.floor(seconds / 3600)
+        minutes = math.floor((seconds % 3600) / 60)
+        return f"{hours}時間{minutes}分{seconds % 60}秒"
+
+
 def split_text_by_time_intervals(json_data, split_duration=60) -> dict[str, dict[str, str]]:
     """与えられた JSON データを指定した時間間隔でテキストを分割し、各チャンクの情報を返す
 
