@@ -188,7 +188,7 @@ def generate_video_response(llm: ChatOpenAI, question: str, content: str) -> str
     human_template = """
         以下のテキストを元に「{question}」についての質問に答えてください。
 
-        {document}
+        {content}
     """
 
     system_message_prompt = SystemMessagePromptTemplate.from_template(system_template)
@@ -196,7 +196,7 @@ def generate_video_response(llm: ChatOpenAI, question: str, content: str) -> str
     chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt, human_message_prompt])
     prompt_message_list = chat_prompt.format_prompt(
         question=question,
-        document=content).to_messages()
+        content=content).to_messages()
     response = llm(prompt_message_list)
 
     return response
