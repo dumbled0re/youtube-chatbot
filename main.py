@@ -87,6 +87,38 @@ def get_index(llm, message):
     return chat_completion
 
 
+def set_up_page() -> None:
+    """
+    ページの設定とヘッダーを表示する関数
+    """
+
+    # ページ上部の部分の設定
+    st.set_page_config(
+        page_title="Youtube Chatbot",
+        page_icon="🤖",
+    )
+
+    # ヘッダーの表示
+    st.header("Youtube Chatbot 🤖")
+
+
+def init_session_state(session_state: dict) -> dict[str, list]:
+    """セッションステートを初期化する関数
+
+    Args:
+        session_state (dict): セッションステート
+    Returns:
+        dict: 初期化されたセッションステート
+    """
+
+    if not session_state:
+        session_state.messages = [
+            SystemMessage(content="You are a helpful assistant.")
+        ]
+
+    return session_state
+
+
 def display_chat_history(messages: list) -> None:
     """チャット履歴を表示する関数
 
@@ -172,21 +204,9 @@ def main():
     llm = ChatOpenAI(openai_api_key=os.environ.get("OPENAI_API_KEY"),
                      model_name="gpt-3.5-turbo-16k",
                      temperature=0)
+    set_up_page()
+    session_state = init_session_state(st.session_state)
 
-    # ページ上部の部分
-    st.set_page_config(
-        page_title="Youtube chatbot",
-        page_icon="🤗"
-    )
-    st.header("Youtube chatbot 🤗")
-
-    # チャット履歴の初期化
-    if not st.session_state:
-        st.session_state.messages = [
-            SystemMessage(content="You are a helpful assistant.")
-        ]
-
-    # ユーザーの入力を監視
     url = st.text_input("Youtube URL: ", key="input")
     if url:
         with st.spinner("Fetching Content ..."):
@@ -202,13 +222,12 @@ def main():
             chunk_dict = split_text_by_time_intervals(transcript)
 
     if user_input := st.chat_input("聞きたいことを入力してね！"):
-        st.session_state.messages.append(HumanMessage(content=user_input))
+        session_state.messages.append(HumanMessage(content=user_input))
         with st.spinner("ChatGPT is typing ..."):
             response = get_question(llm, user_input)
             if response.additional_kwargs:
                 if response.additional_kwargs["function_call"]["name"] == "get_question":
-                    question = json.loads(
-                        response.additional_kwargs["function_call"]["arguments"]).get("question")
+                    question = json.loads(response.additional_kwargs["function_call"]["arguments"]).get("question")
                     system_template = "あなたは、質問者からの質問を回答するAIです。"
                     human_template = """
                         以下のテキストを元に「{question}」についての質問に答えてください。
@@ -225,7 +244,7 @@ def main():
                         question=question,
                         document=content).to_messages()
                     second_response = llm(prompt_message_list)
-                    st.session_state.messages.append(AIMessage(content=second_response.content))
+                    session_state.messages.append(AIMessage(content=second_response.content))
 
                 elif response.additional_kwargs["function_call"]["name"] == "get_keyword":
                     keyword = json.loads(response.additional_kwargs["function_call"]["arguments"]).get("keyword")
@@ -263,22 +282,19 @@ def main():
                         if index is not None:
                             start = convert_seconds(chunk_dict[int(index)]["start"])
                             end = convert_seconds(chunk_dict[int(index)]["end"])
-                            print(f"start: {start}")
-                            print(f"end: {end}")
                             ai_answer = f"{keyword}の説明は動画の{start}から{end}で話されています。"
-                            st.session_state.messages.append(AIMessage(content=ai_answer))
+                            session_state.messages.append(AIMessage(content=ai_answer))
                         else:
                             ai_answer = f"私が思う{keyword}の説明に最も関連性が高いtextのインデックスは{index}番です。"
-                            st.session_state.messages.append(AIMessage(content=ai_answer))
+                            session_state.messages.append(AIMessage(content=ai_answer))
                     else:
-                        st.session_state.messages.append(AIMessage(content=second_response.content))
+                        session_state.messages.append(AIMessage(content=second_response.content))
             else:
-                response = llm(st.session_state.messages)
-                st.session_state.messages.append(
-                    AIMessage(content=response.content))
+                response = llm(session_state.messages)
+                session_state.messages.append(AIMessage(content=response.content))
 
     # チャット履歴の表示
-    messages = st.session_state.get('messages', [])
+    messages = session_state.get('messages', [])
     display_chat_history(messages)
 
 
