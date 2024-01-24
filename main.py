@@ -29,7 +29,7 @@ functions = [
         },
     },
     {
-        "name": "get_keyword",
+        "name": "generate_video_time_response",
         "description": "キーワードを抽出する",
         "parameters": {
             "type": "object",
@@ -211,9 +211,39 @@ def generate_video_response(llm: ChatOpenAI, question: str, content: str) -> str
     human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
     chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt, human_message_prompt])
     prompt_message_list = chat_prompt.format_prompt(
-        language="日本語",
         question=question,
         document=content).to_messages()
+    response = llm(prompt_message_list)
+
+    return response
+
+
+def generate_video_time_response(llm: ChatOpenAI, keyword: str, chunk_dict: dict[str, dict]) -> str:
+    system_template = "あなたは、質問者からの質問を回答するAIです。"
+    human_template = """
+    キーワード: {keyword}
+
+    jsonデータ:
+    --------------------
+    {chunk_dict}
+    --------------------
+
+    上記のjsonデータの中から、キーワード「{keyword}」と最も関連性が高いtextのインデックスを答えてください。
+
+    回答の形式は
+    「{keyword}の説明は{index}番です。」
+    としてください。
+    もしも、{keyword}の説明がない場合は「{keyword}の説明は動画内にありません。」としてください。
+    """
+
+    system_message_prompt = SystemMessagePromptTemplate.from_template(system_template)
+    human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
+    chat_prompt = ChatPromptTemplate.from_messages(
+        [system_message_prompt, human_message_prompt])
+    prompt_message_list = chat_prompt.format_prompt(
+        keyword=keyword,
+        chunk_dict=chunk_dict,
+        index="インデックス").to_messages()
     response = llm(prompt_message_list)
 
     return response
@@ -250,35 +280,9 @@ def main() -> None:
                     response = generate_video_response(llm, question, content)
                     session_state.messages.append(AIMessage(content=response.content))
 
-                elif additional_kwargs["function_call"]["name"] == "get_keyword":
+                elif additional_kwargs["function_call"]["name"] == "generate_video_time_response":
                     keyword = json.loads(additional_kwargs["function_call"]["arguments"]).get("keyword")
-
-                    system_template = "あなたは、質問者からの質問を回答するAIです。"
-                    human_template = """
-                    キーワード: {keyword}
-
-                    jsonデータ:
-                    --------------------
-                    {chunk_dict}
-                    --------------------
-
-                    上記のjsonデータの中から、キーワード「{keyword}」と最も関連性が高いtextのインデックスを答えてください。
-
-                    回答の形式は
-                    「{keyword}の説明は{index}番です。」
-                    としてください。
-                    もしも、{keyword}の説明がない場合は「{keyword}の説明は動画内にありません。」としてください。
-                    """
-
-                    system_message_prompt = SystemMessagePromptTemplate.from_template(system_template)
-                    human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
-                    chat_prompt = ChatPromptTemplate.from_messages(
-                        [system_message_prompt, human_message_prompt])
-                    prompt_message_list = chat_prompt.format_prompt(
-                        keyword=keyword,
-                        chunk_dict=chunk_dict,
-                        index="インデックス").to_messages()
-                    response = llm(prompt_message_list)
+                    response = generate_video_time_response(llm, keyword, chunk_dict)
                     additional_kwargs = get_index(llm, response.content)
                     if additional_kwargs:
                         # TODO: ここでfunction callingを使用するかが悩ましい(third_response内には数字が入っているけど取得していない時がある)
@@ -286,7 +290,7 @@ def main() -> None:
                         if index is not None:
                             start = convert_seconds(chunk_dict[int(index)]["start"])
                             end = convert_seconds(chunk_dict[int(index)]["end"])
-                            answer = f"{keyword}の説明は動画の{start}から{end}で話されています。"
+                            answer = f"{keyword}の説明は動画の{start}から{end}です。"
                             session_state.messages.append(AIMessage(content=answer))
                         else:
                             answer = f"私が思う{keyword}の説明に最も関連性が高いtextのインデックスは{index}番です。"
