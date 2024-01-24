@@ -1,6 +1,7 @@
 import json
 import math
 import os
+import re
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -42,30 +43,7 @@ functions = [
             "required": ["keyword"],
         }
     },
-    {
-        "name": "get_index",
-        "description": "インデックス番号を抽出する",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "index": {
-                    "type": "string",
-                    "description": "インデックス番号 e.g. 1番",
-                },
-            },
-            "required": ["index"],
-        }
-    },
 ]
-
-
-def call_chatbot_function(llm: ChatOpenAI, question: str) -> dict[str, dict[str, str]]:
-    messages = llm.predict_messages(
-        [HumanMessage(content=question)],
-        functions=functions,
-    )
-
-    return messages.additional_kwargs
 
 
 def set_up_page() -> None:
@@ -116,6 +94,21 @@ def display_chat_history(messages: list) -> None:
                 st.markdown(message.content)
 
 
+def extract_number_from_text(text: str) -> int or None:
+    """テキストから数字を抽出
+
+    Args:
+        text (str): 抽出対象のテキスト
+
+    Returns:
+        int|None: テキストから抽出された数字（見つからない場合は None）
+    """
+
+    match = re.search(r'\d+', text)
+
+    return int(match.group()) if match else None
+
+
 def convert_seconds(seconds: int) -> str:
     """秒を分や時間に換算する
 
@@ -145,12 +138,12 @@ def convert_seconds(seconds: int) -> str:
 def split_text_by_time_intervals(json_data, split_duration=60) -> dict[str, dict[str, str]]:
     """与えられた JSON データを指定した時間間隔でテキストを分割し、各チャンクの情報を返す
 
-    Parameters:
+    Args:
         json_data (list): JSON データのリスト
-        split_duration (float): 区切りの秒数
+        split_duration (int): 区切りの秒数
 
     Returns:
-        dict: 各チャンクの情報を含む辞書。キーはチャンクの番号、値はチャンクの情報を含む辞書
+        dict: 各チャンクと時間情報を含む辞書。キーはチャンクの番号、値はチャンクと時間情報を含む辞書
     """
 
     split_texts = list()
@@ -179,6 +172,15 @@ def split_text_by_time_intervals(json_data, split_duration=60) -> dict[str, dict
     chunk_dict = {i: chunk_info for i, chunk_info in enumerate(split_texts)}
 
     return chunk_dict
+
+
+def call_chatbot_function(llm: ChatOpenAI, question: str) -> dict[str, dict[str, str]]:
+    messages = llm.predict_messages(
+        [HumanMessage(content=question)],
+        functions=functions,
+    )
+
+    return messages.additional_kwargs
 
 
 def generate_video_response(llm: ChatOpenAI, question: str, content: str) -> str:
@@ -265,18 +267,12 @@ def main() -> None:
                 elif additional_kwargs["function_call"]["name"] == "generate_video_time_response":
                     keyword = json.loads(additional_kwargs["function_call"]["arguments"]).get("keyword")
                     response = generate_video_time_response(llm, keyword, chunk_dict)
-                    additional_kwargs = call_chatbot_function(llm, response.content)
-                    if additional_kwargs:
-                        # TODO: ここでfunction callingを使用するかが悩ましい(third_response内には数字が入っているけど取得していない時がある)
-                        index = json.loads(additional_kwargs["function_call"]["arguments"]).get("index")
-                        if index is not None:
-                            start = convert_seconds(chunk_dict[int(index)]["start"])
-                            end = convert_seconds(chunk_dict[int(index)]["end"])
-                            answer = f"{keyword}の説明は動画の{start}から{end}です。"
-                            session_state.messages.append(AIMessage(content=answer))
-                        else:
-                            answer = f"私が思う{keyword}の説明に最も関連性が高いtextのインデックスは{index}番です。"
-                            session_state.messages.append(AIMessage(content=answer))
+                    index = extract_number_from_text(response.content)
+                    if index is not None:
+                        start = convert_seconds(chunk_dict[index]["start"])
+                        end = convert_seconds(chunk_dict[index]["end"])
+                        answer = f"{keyword}の説明は動画の{start}から{end}です。"
+                        session_state.messages.append(AIMessage(content=answer))
                     else:
                         session_state.messages.append(AIMessage(content=response.content))
             else:
