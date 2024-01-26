@@ -99,7 +99,6 @@ def extract_number_from_text(text: str) -> int or None:
 
     Args:
         text (str): 抽出対象のテキスト
-
     Returns:
         int|None: テキストから抽出された数字（見つからない場合は None）
     """
@@ -141,9 +140,8 @@ def split_text_by_time_intervals(json_data, split_duration=60) -> dict[str, dict
     Args:
         json_data (list): JSON データのリスト
         split_duration (int): 区切りの秒数
-
     Returns:
-        dict: 各チャンクと時間情報を含む辞書。キーはチャンクの番号、値はチャンクと時間情報を含む辞書
+        dict: 各チャンクと時間情報を含む辞書。キーはチャンク番号、値はチャンクと時間情報を含む辞書
     """
 
     split_texts = list()
@@ -279,7 +277,6 @@ def main() -> None:
                 response = llm(session_state.messages)
                 session_state.messages.append(AIMessage(content=response.content))
 
-    # チャット履歴の表示
     messages = session_state.get('messages', [])
     display_chat_history(messages)
 
