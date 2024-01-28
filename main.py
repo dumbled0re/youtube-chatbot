@@ -135,10 +135,10 @@ def convert_seconds(seconds: int) -> str:
 
 
 def split_text_by_time_intervals(json_data, split_duration=60) -> dict[str, dict[str, str]]:
-    """与えられた JSON データを指定した時間間隔でテキストを分割し、各チャンクの情報を返す
+    """与えられたjsonデータを指定した時間間隔でテキストを分割し、各チャンクの情報を返す
 
     Args:
-        json_data (list): JSON データのリスト
+        json_data (list): jsonデータのリスト
         split_duration (int): 区切りの秒数
     Returns:
         dict: 各チャンクと時間情報を含む辞書。キーはチャンク番号、値はチャンクと時間情報を含む辞書
@@ -173,6 +173,15 @@ def split_text_by_time_intervals(json_data, split_duration=60) -> dict[str, dict
 
 
 def call_chatbot_function(llm: ChatOpenAI, question: str) -> dict[str, dict[str, str]]:
+    """function callingを行うかどうかを判定し、行う場合は関数名と引数を返す
+
+    Args:
+        llm (ChatOpenAI): ChatOpenAIのインスタンス
+        question (str): 質問内容
+    Returns:
+        dict: 関数名と引数を含む辞書。関数を呼び出さない場合は空の辞書
+    """
+
     messages = llm.predict_messages(
         [HumanMessage(content=question)],
         functions=functions,
