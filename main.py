@@ -191,6 +191,16 @@ def call_chatbot_function(llm: ChatOpenAI, question: str) -> dict[str, dict[str,
 
 
 def generate_video_response(llm: ChatOpenAI, question: str, content: str) -> str:
+    """質問に対する回答を生成
+
+    Args:
+        llm (ChatOpenAI): ChatOpenAIのインスタンス
+        question (str): 質問内容
+        content (str): 動画の内容
+    Returns:
+        str: 回答内容
+    """
+
     system_template = "あなたは、質問者からの質問を回答するAIです。"
     human_template = """
         以下のテキストを元に「{question}」についての質問に答えてください。
