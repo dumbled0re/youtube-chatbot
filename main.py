@@ -220,6 +220,16 @@ def generate_video_response(llm: ChatOpenAI, question: str, content: str) -> str
 
 
 def generate_video_time_response(llm: ChatOpenAI, keyword: str, chunk_dict: dict[str, dict]) -> str:
+    """キーワードに対しての開始時刻の回答を生成
+
+    Args:
+        llm (ChatOpenAI): ChatOpenAIのインスタンス
+        keyword (str): キーワード
+        chunk_dict (dict): チャンクの辞書
+    Returns:
+        str: 回答内容
+    """
+
     system_template = "あなたは、質問者からの質問を回答するAIです。"
     human_template = """
     キーワード: {keyword}
