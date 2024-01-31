@@ -48,7 +48,7 @@ functions = [
 
 def set_up_page() -> None:
     """
-    ページの設定とヘッダーを表示する関数
+    ページの設定とヘッダーを表示
     """
 
     # ページ上部の部分の設定
@@ -62,7 +62,7 @@ def set_up_page() -> None:
 
 
 def init_session_state(session_state: dict) -> dict[str, list[str]]:
-    """セッションステートを初期化する関数
+    """セッションステートを初期化
 
     Args:
         session_state (dict): セッションステート
@@ -79,7 +79,7 @@ def init_session_state(session_state: dict) -> dict[str, list[str]]:
 
 
 def display_chat_history(messages: list) -> None:
-    """チャット履歴を表示する関数
+    """チャット履歴を表示
 
     Args:
         messages (list): チャットメッセージのリスト
@@ -99,7 +99,6 @@ def extract_number_from_text(text: str) -> int or None:
 
     Args:
         text (str): 抽出対象のテキスト
-
     Returns:
         int|None: テキストから抽出された数字（見つからない場合は None）
     """
@@ -110,7 +109,7 @@ def extract_number_from_text(text: str) -> int or None:
 
 
 def convert_seconds(seconds: int) -> str:
-    """秒を分や時間に換算する
+    """秒を分や時間に換算
 
     Args:
         seconds (int): 換算対象の秒数
@@ -136,14 +135,13 @@ def convert_seconds(seconds: int) -> str:
 
 
 def split_text_by_time_intervals(json_data, split_duration=60) -> dict[str, dict[str, str]]:
-    """与えられた JSON データを指定した時間間隔でテキストを分割し、各チャンクの情報を返す
+    """与えられたjsonデータを指定した時間間隔でテキストを分割し、各チャンクの情報を返す
 
     Args:
-        json_data (list): JSON データのリスト
+        json_data (list): jsonデータのリスト
         split_duration (int): 区切りの秒数
-
     Returns:
-        dict: 各チャンクと時間情報を含む辞書。キーはチャンクの番号、値はチャンクと時間情報を含む辞書
+        dict: 各チャンクと時間情報を含む辞書。キーはチャンク番号、値はチャンクと時間情報を含む辞書
     """
 
     split_texts = list()
@@ -175,6 +173,15 @@ def split_text_by_time_intervals(json_data, split_duration=60) -> dict[str, dict
 
 
 def call_chatbot_function(llm: ChatOpenAI, question: str) -> dict[str, dict[str, str]]:
+    """function callingを行うかどうかを判定し、行う場合は関数名と引数を返す
+
+    Args:
+        llm (ChatOpenAI): ChatOpenAIのインスタンス
+        question (str): 質問内容
+    Returns:
+        dict: 関数名と引数を含む辞書。関数を呼び出さない場合は空の辞書
+    """
+
     messages = llm.predict_messages(
         [HumanMessage(content=question)],
         functions=functions,
@@ -184,11 +191,21 @@ def call_chatbot_function(llm: ChatOpenAI, question: str) -> dict[str, dict[str,
 
 
 def generate_video_response(llm: ChatOpenAI, question: str, content: str) -> str:
+    """質問に対する回答を生成
+
+    Args:
+        llm (ChatOpenAI): ChatOpenAIのインスタンス
+        question (str): 質問内容
+        content (str): 動画の内容
+    Returns:
+        str: 回答内容
+    """
+
     system_template = "あなたは、質問者からの質問を回答するAIです。"
     human_template = """
         以下のテキストを元に「{question}」についての質問に答えてください。
 
-        {document}
+        {content}
     """
 
     system_message_prompt = SystemMessagePromptTemplate.from_template(system_template)
@@ -196,13 +213,23 @@ def generate_video_response(llm: ChatOpenAI, question: str, content: str) -> str
     chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt, human_message_prompt])
     prompt_message_list = chat_prompt.format_prompt(
         question=question,
-        document=content).to_messages()
+        content=content).to_messages()
     response = llm(prompt_message_list)
 
     return response
 
 
 def generate_video_time_response(llm: ChatOpenAI, keyword: str, chunk_dict: dict[str, dict]) -> str:
+    """キーワードに対しての開始時刻の回答を生成
+
+    Args:
+        llm (ChatOpenAI): ChatOpenAIのインスタンス
+        keyword (str): キーワード
+        chunk_dict (dict): チャンクの辞書
+    Returns:
+        str: 回答内容
+    """
+
     system_template = "あなたは、質問者からの質問を回答するAIです。"
     human_template = """
     キーワード: {keyword}
@@ -279,7 +306,6 @@ def main() -> None:
                 response = llm(session_state.messages)
                 session_state.messages.append(AIMessage(content=response.content))
 
-    # チャット履歴の表示
     messages = session_state.get('messages', [])
     display_chat_history(messages)
 
